@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+const axios = require('axios');
 
 exports.sendEmail = async (req, res) => {
     const { name, email, message } = req.body;
@@ -38,76 +39,34 @@ exports.sendEmail = async (req, res) => {
     });
   };
 
-  exports.sendMailConfirmPayment = (userEmail, leadCount) => {
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_GMAIL,
-        pass: process.env.PASS_GMAIL,
-      }
-    });
-    const message = `Elaboreremo la tua richiesta il prima possibile.`;
-    const subject = "Pagamento ricevuto";
+  exports.sendSMS = async (number, message) => {
+    const apiEndpoint = 'https://rest.clicksend.com/v3/sms/send';
+    const username = 'info@comparacorsi.it';
+    const apiKey = '60B7E5DB-2473-5C03-64DC-578EE3B8F09E';
   
-    const mailOptions = {
-      from: process.env.EMAIL_GMAIL,
-      to: userEmail,
-      subject: subject,
-      html: `
-        <p>Ciao,</p>
-        <p>Abbiamo ricevuto il tuo acquisto per ${leadCount} lead</p>
-        <p>${message}</p>
-        <p>Grazie,</p>
-        <p>Il tuo team di Multiversity</p>
-      `
+    const smsCollection = {
+      messages: [
+        {
+          to: number,
+          source: 'sdk',
+          body: message,
+        },
+      ],
     };
   
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(error);
-        res.status(500).send('Si è verificato un errore durante l\'invio dell\'email.');
-      } else {
-        console.log('Email inviata: ' + info.response);
-        res.status(200).send('Grazie per averci contattato. Ti risponderemo il prima possibile.');
-      }
-    });
-  };  
-
-  exports.sendMailLeadInsufficienti = (userEmail, leadCount) => {
-
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_GMAIL,
-        pass: process.env.PASS_GMAIL,
-      }
-    });
-    const message = `Siamo spiacenti, ma non ci sono abbastanza lead disponibili.`;
-    const subject = "Lead Insufficienti";
+    try {
+      const response = await axios.post(apiEndpoint, smsCollection, {
+        auth: {
+          username: username,
+          password: apiKey,
+        },
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
   
-    const mailOptions = {
-      from: process.env.EMAIL_GMAIL,
-      to: userEmail,
-      subject: subject,
-      html: `
-        <p>Ciao,</p>
-        <p>Abbiamo ricevuto il tuo acquisto. Sfortunatamente i lead nel database sono inferiori a quelli richiesti.
-        Ti preghiamo di attendere qualche giorno per ricevere ${leadCount} lead</p>
-        <p><strong>Messaggio:</strong> ${message}</p>
-        <p>Grazie,</p>
-        <p>Il tuo team di Multiversity</p>
-      `
-    };
-  
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error(error);
-        res.status(500).send('Si è verificato un errore durante l\'invio dell\'email.');
-      } else {
-        console.log('Email inviata: ' + info.response);
-        res.status(200).send('Grazie per averci contattato. Ti risponderemo il prima possibile.');
-      }
-    });
+      console.log(response.data);
+    } catch (error) {
+      console.error(error.response.data);
+    }
   };  
-

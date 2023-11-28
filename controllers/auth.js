@@ -1,15 +1,15 @@
 const User = require('../models/user');
 const {hashPassword, comparePassword} = require('../helpers/auth');
 const jwt = require('jsonwebtoken');
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const nodemailer = require('nodemailer');
+const { sendSMS } = require('./sendEmail');
 require('dotenv').config()
 
 exports.register = async (req, res) => {
   try {
     // validation
-    const { name, email, password, role, pIva, codeSdi, nameECP, isChecked, legaleResponsabile, via, emailLegale, tag } = req.body;
-    if (!name) {
+    const { name, surname, email, phone, password } = req.body;
+    if (!name || !surname) {
       return res.json({
         error: "Name is required",
       });
@@ -27,82 +27,25 @@ exports.register = async (req, res) => {
     }
     const hashedPassword = await hashPassword(password);
 
-    const customer = await stripe.customers.create({
-      email: emailLegale,
-      name: nameECP,
-      metadata: {
-        pIva,
-        codeSdi,
-        nameECP,
-        via,
-        legaleResponsabile,
-        emailLegale,
-      },
-    });
-
     const codeVerifyEmail = Math.floor(100000 + Math.random() * 900000);
     try {
       const user = await new User({
         name,
+        surname,
         email,
+        phone,
         password: hashedPassword,
-        stripe_customer_id: customer.id,
-        pIva,
-        codeSdi,
-        nameECP,
-        role,
-        isChecked,
         codeVerifyEmail,
-        via,
-        legaleResponsabile,
-        emailLegale,
-        tag,
       }).save();
+
+      await sendSMS(phone, codeVerifyEmail);
   
       const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, {
         expiresIn: "365d",
       });
 
       const { password, ...rest } = user._doc;
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.EMAIL_GMAIL,
-          pass: process.env.PASS_GMAIL,
-        }
-      });
   
-      const mailOptions = {
-        from: process.env.EMAIL_GMAIL,
-        to: 'info+leadsystem@funnelconsulting.it',
-        subject: 'Nuova iscrizione',
-        text: `Si è iscrittto un nuovo utente: Email: ${email}, Nome : ${name}, Nome ECP: ${nameECP}, partita IVA: ${pIva}, Codice SDI: ${codeSdi}.`,
-      };
-
-      const mailOptionsVerifyEmail = {
-        from: process.env.EMAIL_GMAIL,
-        to: email,
-        subject: 'Verifica la tua email',
-        text: `Puoi verificare la tua email con questo codice: ${codeVerifyEmail}.`,
-      };
-
-      transporter.sendMail(mailOptionsVerifyEmail, (error, info) => {
-        if (error) {
-          console.log(error);
-          return res.status(500).json({ error: 'Si è verificato un errore durante l\'invio dell\'email' });
-        }
-        console.log('Email inviata:', info.response);
-        res.status(200).json({ message: 'Email inviata correttamente' });
-      })
-  
-      transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-          console.log(error);
-          return res.status(500).json({ error: 'Si è verificato un errore durante l\'invio dell\'email' });
-        }
-        console.log('Email inviata:', info.response);
-        res.status(200).json({ message: 'Email inviata correttamente' });
-      })
       return res.json({
         token,
         user: rest,
@@ -117,21 +60,21 @@ exports.register = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
-    // check email
+
     const user = await User.findOne({ email: req.body.email });
     if (!user) {
       return res.json({
         error: "No user found",
       });
     }
-    // check password
+
     const match = await comparePassword(req.body.password, user.password);
     if (!match) {
       return res.json({
         error: "Wrong password",
       });
     }
-    // create signed token
+
     const token = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "365d",
     });
@@ -148,7 +91,7 @@ exports.login = async (req, res) => {
 };
 
 exports.updateUser = async (req, res) => {
-  console.log(req.body)
+
   try {
     const { nameECP, codeSdi, pIva, via, city, stato, cap, emailNotification } = req.body;
 
@@ -250,11 +193,11 @@ exports.resetPassword = async (req, res) => {
 };
 
 exports.verifyEmail = async (req, res) => {
-  const email = req.body.email;
-  const codeVerifyEmail = req.body.codeVerifyEmail;
+  const phone = req.body.phone;
+  const codeVerifyEmail = req.body.code;
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ phone });
     if (!user) {
       return res.status(404).json({ error: 'Utente non trovato' });
     }
@@ -269,6 +212,8 @@ exports.verifyEmail = async (req, res) => {
     const updatedUser = await User.findById(user._id).lean();
 
     res.json({
+      success: true,
+      status: 200,
       user: updatedUser,
     });
   } catch (error) {
