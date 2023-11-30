@@ -221,3 +221,33 @@ exports.verifyEmail = async (req, res) => {
     res.status(500).json({ error: 'Si è verificato un errore durante la reimpostazione della password' });
   }
 };
+
+exports.resendSms = async (req, res) => {
+  try {
+    const phone = req.body.phone;
+
+    const user = await User.findOne({ phone });
+    if (!user) {
+      return res.status(404).json({ error: 'Utente non trovato' });
+    }
+
+    const codeVerifyEmail = Math.floor(100000 + Math.random() * 900000);
+    user.codeVerifyEmail = codeVerifyEmail;
+    await user.save();
+
+    await sendSMS(phone, codeVerifyEmail);
+
+    res.json({
+      message: 'Ok',
+      status: 200,
+      success: true,
+    })
+  } catch (error) {
+    console.log(error);
+    res.json({
+      message: 'Errore',
+      success: false,
+      status: 500,
+    })
+  }
+}
